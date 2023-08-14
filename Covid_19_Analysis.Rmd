@@ -1,0 +1,132 @@
+---
+title: "Covid 19 Analysis"
+author: "Dawson Tam"
+date: "2023-07-06"
+abstract: |
+  In an effort to undertsand the impact of Covid-19 on the world, I will analyze the multiple facets of covid related deaths and compare them across variables I deem relevant. Additionally, I want to measure whether or not states with higher vaccine rates see a lower death rate to prove the effectiviness of vaccines.
+  
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(skimr)
+library(Hmisc)
+library(ggplot2)
+```
+
+summarizing the global data to see which parts of the data sheet need cleaning and processing
+
+```{r}
+Covid_19_rates <- read.csv("/Users/dawsontam/Desktop/COVID19_line_list_data.csv")
+describe(Covid_19_rates)
+```
+Add new column to dataframe as current "death" column is inconsistent. After using describe(), I noticed that there are 14 values for "death". To combat, I will create this new column that standardizes "death".
+
+updated dataframe
+
+```{r}
+Covid_19_rates$death_updated <- as.integer(Covid_19_rates$death != 0)
+unique(Covid_19_rates$death_updated)
+head(Covid_19_rates, 4)
+```
+First, I would like to compare the mean age of the people that are alive with covid versus the mean age of those who have contracted covid and have died. I hyothesize that of those who have contracted covid, there is a greater chance someone will die if they are older.
+
+```{r}
+alive_subset <- subset(Covid_19_rates, death_updated == 0)
+dead_subset <- subset(Covid_19_rates, death_updated == 1)
+alive_mean <- mean(alive_subset$age, na.rm = TRUE)
+dead_mean <- mean(dead_subset$age, na.rm = TRUE)
+dead_mean > alive_mean
+```
+My claim is true as we see that the average age of those who died is greater than the average age of those who are still alive.
+
+Next, I want to compare covid related deaths in male versus females to see if there is a difference in mortality rate. By conudcting a t-test, I can determine whether or not this result is signficant. For this t-test, our null hypothesis is that the death rates for male and females are the same and the alternative hypothesis is that they are different. In order to keep all of my test consistent, I will be using a p-value of 0.05. 
+
+```{r}
+t.test(death_updated ~ gender, data = Covid_19_rates)
+```
+
+As we can see from our results, the mean death rate for males is 0.0846 while the mean death rates for females is 0.0366, which at first glance is drastically different. Our t-test also proves so, as we get a resulting p-value of 0.002. Because 0.002 < 0.05, we can comfortably reject our null hypothesis and conlcude that our results our statistically significant and that the death rates do indeed vary between male and females. 
+
+Another variable that this data set provides it "Visiting Wuhan" expressed as a binary variable. As Wuhan is commonly believed to have orginated in Wuhan China, I thought it would be interesting to test whether or not the death rates in Wuhan were higher than that of the death rates not in Wuhan. Once again, I will be using a two sample t-test with p value of 0.05 to test my hypothesis. 
+
+The null hypothesis is that death rates inside Wuhan and outside Wuhan are the same but the alternative hypothesis is that the two are different.
+
+I begin by making two new subset from from.Wuhan to compare the mean of death rates in these two categories
+
+```{r}
+from_wuhan = subset(Covid_19_rates, from.Wuhan == 1)
+nfrom_wuhan = subset(Covid_19_rates, from.Wuhan == 0)
+mean(from_wuhan$death_updated, na.rm = TRUE) 
+mean(nfrom_wuhan$death_updated, nam.rm = TRUE) 
+```
+```{r}
+t.test(from_wuhan$death_updated, nfrom_wuhan$death_updated)
+```
+As we can see from our t-test above, the p-value is extremely small and incomparable to our p-value of 0.05. Thus we can conclude that rejct the null hypothesis and conclude that death rates are in fact different in and out of Wuhan. 
+
+The second part of this analysis is to measure the effectiveness of vaccines in regards to prevent covid related deaths.
+
+```{r}
+usa_vaccines <- read.csv("/Users/dawsontam/Desktop/us_state_vaccinations.csv")
+states <- read.csv("/Users/dawsontam/Desktop/states.csv")
+describe(usa_vaccines)
+```
+I will now get the mean number of people vaccinated grouped by their state in order to compare the vaccination rate across the state. 
+
+```{r}
+grouped_us_vaccines <- usa_vaccines %>% group_by(location) %>% summarise(mean_total_vaccinated = mean(people_vaccinated, na.rm = TRUE))
+grouped_us_vaccines <- grouped_us_vaccines[grouped_us_vaccines$location %in%  states$State, ]
+grouped_us_vaccines$state_code <- state.abb[match(grouped_us_vaccines$location, state.name)]
+grouped_us_vaccines_abb <- grouped_us_vaccines[,-c(1)]
+grouped_us_vaccines_abb <- grouped_us_vaccines_abb %>% replace(is.na(.), "NY"	)
+grouped_us_vaccines_abb <- grouped_us_vaccines_abb[order(grouped_us_vaccines_abb$state_code),]
+colnames(grouped_us_vaccines_abb)[2] = "State"
+```
+In order to get the death rates, I will have to import another dataset. 
+
+```{r}
+death_rates <- read.csv("/Users/dawsontam/Desktop/covid_deaths_usafacts.csv")
+death_rates_2021_2022 <- death_rates[,-4:-349]
+no_na <- death_rates_2021_2022 %>% replace(is.na(.), 0)
+no_na$sum_of_row <- rowSums(no_na[, c(4:ncol(no_na))])
+cleaned <- no_na[, c("State", "sum_of_row")]
+```
+```{r}
+meaned_deaths_per_state <- cleaned %>% group_by(State) %>% summarise(mean_death = mean(sum_of_row))
+ordered_mean_deaths <- meaned_deaths_per_state[order(meaned_deaths_per_state$State),]
+ordered_mean_deaths <- ordered_mean_deaths[-8, ]
+```
+However, it is important to note that different states have different populations so in order to standardize everything I have to import a 2021 - 2022 per state populations dataset.
+
+```{r}
+populations <- read.csv("/Users/dawsontam/desktop/NST_EST2022_POP_1_2.csv")
+colnames(populations)[1] = "State"
+new_populations <- populations[,-c(2:5) ]
+new_populations <- new_populations[order(new_populations$State), ]
+new_populations <- new_populations[-1, ]
+```
+```{r}
+standardized_death <- merge(x = ordered_mean_deaths, y = new_populations, by = "State", all = TRUE)
+standardized_death <- standardized_death %>% replace(is.na(.), 778597.5	)
+final_standard_death <- standardized_death[-35, ]
+final_standard_death$standard_death <- final_standard_death$mean_death / final_standard_death$mean_2021_2022
+```
+Now that I have my standardized death rates for the 50 states, I can begin a linear regression analysis to see whether not we see a negative correlation between vaccine and death rates.
+
+```{r}
+vaccines_vs_death <- merge(x = final_standard_death, y = grouped_us_vaccines_abb, by = "State", all = TRUE)
+lmvaccine_death <- lm(formula = mean_total_vaccinated ~ standard_death, data = vaccines_vs_death)
+summary(lmvaccine_death)
+```
+```{r}
+plot(standard_death ~ mean_total_vaccinated, data = vaccines_vs_death, main = "VACCINATION RATE VERSUS DEATH RATE", xlab = "mean number of vaccinations", ylab = "mean number of covid related deaths")
+abline(lm(standard_death ~ mean_total_vaccinated, data = vaccines_vs_death))
+```
+
+
+As we can see from our linear analysis, we can see that there is indeed a negative correlation between vaccination rates and death rates in the 50 states. Our linear coefficient is 3945886 with a standard error of 728347. Although it is not a severely strong negative linear relationship. It is undeniable that there is a negative correlation between these two factors and thus my orginal hypothesis is corect. 
+
+

@@ -1,0 +1,360 @@
+---
+title: "Final Project"
+author: "Dawson Tam Alison Gorenflo"
+date: "2023-06-01"
+output: html_document
+---
+
+
+## R Markdown
+
+Application Problems 
+
+##loading the data into the file
+```{R}
+library(ISLR2)
+data("Carseats")
+Carseats
+```
+
+1a. Fit a linear regression, with sales a response and all other variables as covariates. 
+
+##fitting the linear repgression model for Sales, all others are predictors
+```{R}
+Carseats$ShelveLoc <- as.factor(Carseats$ShelveLoc)
+Carseats$Urban <- as.factor(Carseats$Urban)
+Carseats$US <- as.factor(Carseats$US)
+
+lm.ft <- lm(Sales ~ ., data = Carseats)
+```
+```{R}
+summary(lm.ft)
+```
+The Coefficients for the covariates are listed above. 
+
+1b. 
+
+###testing whether or not the linear model is a good fit for the data
+```{r}
+par(mfrow = c(2, 2))
+plot(lm.ft)
+```
+As we can see above, the linear model is a relatively good fit or the data. Starting with our Residuals vs Fitted graph, we see equally spread residuals around our horizontal line in no particular fashion. Thus we can say that there are no non-linear relationships in our data. Next, we have the Normal Q-Q plot. In our case the residuals follow a relatively straight line indicative of a proper linear model. Our Scale-Location shows how well dispersed our residuals are. As we can see here, the residuals are somewhat clustered around 5-10. Lastly, we have the Residuals vs Leverage plot to look for outliers that could strongly influence our data. In this case, we do not see that ocuring. To conclude, the linear regression was an appropraite fit for the data.
+
+1c.
+For our test the $\beta$0 = 0, We set a our null hypothesis as $\beta$0 != 0 and the alternative test as $\beta$0 = 0. From there we calculate the t-value for CompPrice by taking the coefficient and standard error from the linear regression and dividing them. This gives us t value of 22.378. From there, we calculate the probability of p value and we get p < 0.00001 < 0.05. Thus we reject the null hypothesis. 
+
+For $beta$1. The null hypothesis is also $\beta$ != 0 and the alternative is that $\beta$0 = 0. We take the t-value from the table and get a value of 8.565. That results in a p value of p < 0.0001 < 0.05 so we can also reject the null hypothesis in this case as well. 
+
+Thus, we can conclude that $\beta$0 = $\beta$1 = 0.
+
+
+2a. Split the data into training and test sets. 
+
+##splitting the data
+```{R}
+set.seed(1)
+train <- sample(nrow(Carseats), 0.8 * nrow(Carseats) )
+test <- (-train)
+```
+
+We split the data into 80% train set and 20% test set.
+
+2b. fitting the ridge regression 
+```{R}
+library(glmnet)
+```
+
+##perform ridge regression
+```{r}
+x <- model.matrix(Sales ~ ., Carseats)[, -1]
+y <- Carseats$Sales
+set.seed(1)
+cv.out <- cv.glmnet(x[train, ], y[train], alpha = 0)
+plot(cv.out)
+```
+
+## reporting the best lambda value
+```{r}
+bestlam <- cv.out$lambda.min
+bestlam
+```
+lambda value that results in the smallest cross validation error is 0.14.
+
+##performing the ridge regression
+```{r}
+ridge.mod <- glmnet(x[train, ], y[train], alpha = 0)
+predict(ridge.mod, type = "coefficients", s = bestlam)[1:12,]
+```
+
+
+2C. Report the RMSE using model from 2b.
+
+##performing the RMSE
+```{r}
+ridge.pred <- predict(ridge.mod, s = bestlam, newx = x[test, ])
+sqrt(mean((ridge.pred - y[test])^2))
+```
+
+2d. Do random forest model on training data, report RMSE
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+set.seed(1)
+bag.Carseats <- randomForest(Sales ~ ., data = Carseats,
+    subset = train, mtry = 7, importance = TRUE)
+bag.Carseats
+```
+```{r}
+rf_predict <- predict(rf_model, newdata = Carseats[-train, ])
+Carseats.test <- Carseats[-train, "Sales"]
+mse_rf <- mean((rf_predict - Carseats.test)^2)
+rmse_rf <- sqrt(mse_rf)
+rmse_rf
+```
+
+2e. 
+
+We can make a case for the ridge regression because its RMSE value is lower than the RMSE value for the random forest regression. This allows us to conclude that there is less error in ridge regression compared to the random forest regression. The ridge regression is better for making different predicitons as the radom forest regression is limited to only the train set. On the other hand, the random forest regression is very good for achieving extremely high accuracies.
+
+
+3.
+a)
+##making predictor X
+```{r}
+set.seed(1)
+X <- rt(200, 15)
+```
+b)
+##making noise vector
+```{r}
+set.seed(1)
+epsilon <- rt(200,5)
+```
+c)
+##making response vector Y
+```{r}
+set.seed(1)
+Y <- 5 + 2*sin(X) - 7*exp(2*cos(X)) / (1+exp(2*cos(X))) + epsilon
+```
+d)
+##Fit polynomial regression for Y on X with the order of X ranging from 1 to 5
+```{r}
+library(ggplot2)
+lm_order1 <- lm(Y ~ poly(X,1,raw=TRUE))
+lm_order2 <- lm(Y ~ poly(X,2,raw=TRUE))
+lm_order3 <- lm(Y ~ poly(X,3,raw=TRUE))
+lm_order4 <- lm(Y ~ poly(X,4,raw=TRUE))
+lm_order5 <- lm(Y ~ poly(X,5,raw=TRUE))
+
+data_frame <- data.frame(X,Y)
+
+ggplot(data=data_frame, aes(x = X, y =Y )) +
+  geom_point() + 
+  geom_line(aes(x = X, y = predict(lm_order1), color = "red")) +
+  geom_line(aes(x = X, y = predict(lm_order2), color = "orange")) +
+  geom_line(aes(x = X, y = predict(lm_order3), color = "green")) +
+  geom_line(aes(x = X, y = predict(lm_order4), color = "blue")) +
+  geom_line(aes(x = X, y = predict(lm_order5), color = "purple")) +
+  scale_color_manual(values = c("red", "orange", "green", "blue", "purple"), labels = c("X1", "X2", "X3", "X4", "X5")) +
+  labs(title = "Polynomial Regression for Y on X",
+       x = "X",
+       y = "Y",
+       color = "Polynomial Order") +
+  theme_minimal()
+```
+e)
+##seeing which model is the best
+```{r}
+summary(lm_order1)
+summary(lm_order2)
+summary(lm_order3)
+summary(lm_order4)
+summary(lm_order5)
+```
+We prefer the model with the polynomial of 4th or 5th degree. From the graph, it is clear that the lower order polynomial regression models don't follow the shape of our data as closely as the 4th and 5th degree polynomial regression models do. We also took a look at the adjusted R-squared values for each model, and saw that the 4th order polynomial regression model has the lowest value, with the adjusted R-squared for the 5th order polynomial regression model being only marginally lower.
+
+f)
+##confidence interval using least squares theory
+```{r}
+coefficient2 <- coef(lm_order2)
+beta1 <- coefficient2[2] + coefficient2[3]
+se <- sqrt(sum(lm_order2$residuals^2)/(200-3))*sqrt(1/200 + (1/200)*((1-mean(X))^2/sum((X-mean(X))^2)))
+t_value <- qt(0.95/2, 200-3, lower.tail=F)
+CI_leastsquares <- c(beta1 - t_value*se, beta1 + t_value*se)
+CI_leastsquares
+```
+We are 95% confident that the true value of Y, when X=1 and when using the second order linear model, is between 1.991546 and 2.005476.
+
+g)
+##confidence interval using bootstrap
+```{r}
+fit_model <- function(data) {
+  lm(Y ~ X + I(X^2), data = data)}
+##set adequate amount of iterations so that bootstrap is valid
+num_iterations <- 1000
+
+beta0_values <- numeric(num_iterations)
+beta1_values <- numeric(num_iterations)
+beta2_values <- numeric(num_iterations)
+predicted_values <- numeric(num_iterations)
+
+for (i in 1:num_iterations) {
+  bootstrap_sample <- data.frame(X = sample(X, replace = TRUE), Y = sample(Y, replace = TRUE))
+  
+  # Fittting the bootstrap model
+  model <- fit_model(bootstrap_sample)
+  beta0_values[i] <- coef(model)["(Intercept)"]
+  beta1_values[i] <- coef(model)["X"]
+  beta2_values[i] <- coef(model)["I(X^2)"]
+  
+  # Calculate the predicted value of Y at X = 1
+  predicted_values[i] <- predict(model, newdata = data.frame(X = 1))
+}
+
+# Compute the lower and upper percentiles of the predicted values
+lower_percentile <- quantile(predicted_values, 0.05)
+upper_percentile <- quantile(predicted_values, 0.95)
+
+# Construct the 90% bootstrap confidence interval
+confidence_interval <- c(lower_percentile, upper_percentile)
+
+# Print the confidence interval
+cat("The 90% bootstrap confidence interval at X = 1 is:", confidence_interval)
+```
+
+4a. 
+```{r}
+data("College")
+College
+College$Private <- as.factor(College$Private)
+```
+
+##split data into training and test set
+```{r}
+set.seed(1)
+train_index <- sample(1:nrow(College), 0.7 * nrow(College)) 
+train_data <- College[train_index, ]
+test_data <- College[-train_index, ]
+```
+
+4b. perform logistic regression
+```{r}
+logistic_model <- glm(Private ~ . - Private, data = train_data, family = "binomial")
+summary(model)
+```
+The coefficient for Top10perc is 1.576e-03 which is a very very smaller number. However, we are dealing with logs here. So a one percent increase in percent of students from top 10% in their high school class is associated with an average increase of 1.567e-03 in the probability of getting into a private college.
+
+4c. what is the test error for logistic regression?
+
+```{r}
+predicted_probs <- predict(logistic_model, newdata = test_data, type = "response")
+threshold <- 0.5
+predicted_labels <- ifelse(predicted_probs > threshold, "Yes", "No")
+test_error <- mean(predicted_labels != test_data$Private)
+cat("Test error for logistic regression:", test_error, "\n")
+```
+
+4d. Fit an LDA
+```{r}
+library(MASS)
+lda_model <- lda(Private ~ . - Private, data = train_data)
+predicted_labels_lda <- predict(lda_model, newdata = test_data)$class
+test_error_lda <- mean(predicted_labels != test_data$Private)
+test_error_lda
+```
+The test error for LDA is 0.05555
+
+4e. Fit a QDA
+```{r}
+library(MASS)
+qda_model <- qda(Private ~ . - Private, data = train_data)
+predicted_labels_qda <- predict(qda_model, newdata = test_data)$class
+test_error_qda <- mean(predicted_labels_qda != test_data$Private)
+test_error_qda
+```
+The test error for the QDA is 0.0769
+
+4f. Fit an SVM
+```{r}
+library(ISLR2)
+library(e1071)
+train_index <- sample(1:nrow(College), 0.7 * nrow(College))
+train_data <- College[train_index, ]
+test_data <- College[-train_index, ]
+
+svm_model <- svm(Private ~ . - Private, data = train_data, kernel = "linear")
+predicted_labels <- predict(svm_model, newdata = test_data)
+test_error_svm <- mean(predicted_labels != test_data$Private)
+test_error_svm
+```
+The test error for SVM is 0.064103
+
+4g. 
+
+We believe that LDA is the best model to perform because it has the lowest error out of the three.
+
+5
+
+5a. Perform PCR on this data
+
+```{r}
+install.packages("MultBiplotR")
+Sys.setenv("RGL_USE_NULL"="TRUE")
+library(MultBiplotR)
+
+data(Protein)
+```
+##omit the variables Comunist and Region
+
+```{r}
+Protein <- Protein[, !(names(Protein) %in% c("Comunist", "Region"))]
+Protein <- Protein[complete.cases(Protein),]
+```
+
+##report first 5
+```{r}
+pca <- prcomp(Protein, scale = TRUE)
+pca$rotation
+```
+
+The first five pc are reported above 
+
+```{r}
+pcaVar <- pca$sdev^2
+pcaVar[1:5]
+pve <- pcaVar / sum(pcaVar)
+pve[1:5]
+sum(pve[1:5])
+```
+They are reported above 
+
+4b. Provide interpretation of first two 
+
+The first PC is highly correlated with Nuts, Cereal, Milk and Eggs. These four variables vary together
+
+4c. Plot first two pc's
+
+```{r}
+biplot(pca, scale = -0.00002, expand = 1, cex = 0.4, xlim = c(-5,5), ylim = c(-2,4))
+```
+Based on the biplot above, we can say that Milk and Nuts are negatively correlated because their respective lines are going in opposite directions. Additionally, we see that Milk and Fruits and Milk and Ceral are not very correlated because their respective lines are intersecting at a 90 degree angle. Milk, white meat, red meat, and eggs are closely correlated.
+
+5d.
+
+There are not many noticeable difference betwen the Northern Countries and the Central Countries. They seem to eat the same thing.
+
+6.
+
+When used in conjunction with random forest, bootstrapping allows for a lot of random variance to be generated so that the model is unbiased. On the other hand, bootstrapping is not suitable for linear regression because linear regression is suitable for data that has bias, more specifically a linear relationship. So introducing more variance into the data would not be beneficial for the linear regression model. 
+
+7. 
+
+One example is when you want to conduct a exploratory data analysis. In the case of exploratory data analysis, the objective is to find patterns within the data to explain relationships rather than controlling factors such as the number of type 1 errors or type II errors. Thus, we would exclude FWER and FDR as these would lead us to make conclusion about the data when all we are trying to do is simply gather data.
+
+8.
+
+
